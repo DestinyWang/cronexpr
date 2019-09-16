@@ -67,10 +67,10 @@ func MustParse(cronLine string) *Expression {
 // about what is a well-formed cron expression from this library's point of
 // view.
 func Parse(cronLine string) (*Expression, error) {
-
+	
 	// Maybe one of the built-in aliases is being used
 	cron := cronNormalizer.Replace(cronLine)
-
+	
 	indices := fieldFinder.FindAllStringIndex(cron, -1)
 	fieldCount := len(indices)
 	if fieldCount < 5 {
@@ -80,11 +80,13 @@ func Parse(cronLine string) (*Expression, error) {
 	if fieldCount > 7 {
 		fieldCount = 7
 	}
-
-	var expr = Expression{}
+	
+	var expr = Expression{
+		expression: cronLine,
+	}
 	var field = 0
 	var err error
-
+	
 	// second field (optional)
 	if fieldCount == 7 {
 		err = expr.secondFieldHandler(cron[indices[field][0]:indices[field][1]])
@@ -95,42 +97,42 @@ func Parse(cronLine string) (*Expression, error) {
 	} else {
 		expr.secondList = []int{0}
 	}
-
+	
 	// minute field
 	err = expr.minuteFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-
+	
 	// hour field
 	err = expr.hourFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-
+	
 	// day of month field
 	err = expr.domFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-
+	
 	// month field
 	err = expr.monthFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-
+	
 	// day of week field
 	err = expr.dowFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-
+	
 	// year field
 	if field < fieldCount {
 		err = expr.yearFieldHandler(cron[indices[field][0]:indices[field][1]])
@@ -140,8 +142,33 @@ func Parse(cronLine string) (*Expression, error) {
 	} else {
 		expr.yearList = yearDescriptor.defaultList
 	}
-
+	
 	return &expr, nil
+}
+
+/******************************************************************************/
+// In contrast to Parse(), ParseWithZone() has an parameter of `offset`,
+// representing the user's time zone.
+// This parameter comes from the second return value of the `time.Zone()`
+// function, which the user can pass directly.
+// Most time zones differ from GMT by whole hours
+// Special time zone: IRT,IT(+3:30) AFT(+4:30) MMT(+6:30) NST,NFT(-3:30)
+func ParseWithZone(cronLine string, offset int) (*Expression, error) {
+	if offset < -12*3600 || offset > 12*3600 || offset%(3600/2) != 0 {
+		return nil, fmt.Errorf("illegal time zone offset: [%d]", offset)
+	}
+	expression, err := Parse(cronLine)
+	if err != nil {
+		return nil, fmt.Errorf("%s", err.Error())
+	}
+	_, localOffset := time.Now().Zone()
+	replacedHourList := make([]int, 0, len(expression.hourList))
+	for _, h := range expression.hourList {
+		replacedHourList = append(replacedHourList, (h+24-offset/3600+localOffset/3600)%24)
+	}
+	expression.hourList = replacedHourList
+	sort.Ints(expression.hourList)
+	return expression, nil
 }
 
 /******************************************************************************/
@@ -159,7 +186,7 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	if fromTime.IsZero() {
 		return fromTime
 	}
-
+	
 	// Since expr.nextSecond()-expr.nextMonth() expects that the
 	// supplied time stamp is a perfect match to the underlying cron
 	// expression, and since this function is an entry point where `fromTime`
@@ -169,7 +196,7 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	// stamp falls in between matching time stamps, thus we move
 	// to closest future matching immediately upon encountering a mismatching
 	// time stamp.
-
+	
 	// year
 	v := fromTime.Year()
 	i := sort.SearchInts(expr.yearList, v)
@@ -188,12 +215,12 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	if v != expr.monthList[i] {
 		return expr.nextMonth(fromTime)
 	}
-
+	
 	expr.actualDaysOfMonthList = expr.calculateActualDaysOfMonth(fromTime.Year(), int(fromTime.Month()))
 	if len(expr.actualDaysOfMonthList) == 0 {
 		return expr.nextMonth(fromTime)
 	}
-
+	
 	// day of month
 	v = fromTime.Day()
 	i = sort.SearchInts(expr.actualDaysOfMonthList, v)
@@ -227,10 +254,10 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	if i == len(expr.secondList) {
 		return expr.nextMinute(fromTime)
 	}
-
+	
 	// If we reach this point, there is nothing better to do
 	// than to move to the next second
-
+	
 	return expr.nextSecond(fromTime)
 }
 

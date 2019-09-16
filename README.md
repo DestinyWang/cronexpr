@@ -78,35 +78,60 @@ Usage
 -----
 Import the library:
 
-    import "github.com/gorhill/cronexpr"
-    import "time"
+```go
+import "github.com/gorhill/cronexpr"
+import "time"
+```
 
 Simplest way:
-
-    nextTime := cronexpr.MustParse("0 0 29 2 *").Next(time.Now())
-
+```go
+nextTime := cronexpr.MustParse("0 0 29 2 *").Next(time.Now())
+```
 Assuming `time.Now()` is "2013-08-29 09:28:00", then `nextTime` will be "2016-02-29 00:00:00".
 
 You can keep the returned Expression pointer around if you want to reuse it:
 
-    expr := cronexpr.MustParse("0 0 29 2 *")
-    nextTime := expr.Next(time.Now())
-    ...
-    nextTime = expr.Next(nextTime)
+```go
+expr := cronexpr.MustParse("0 0 29 2 *")
+nextTime := expr.Next(time.Now())
+...
+nextTime = expr.Next(nextTime)
+```
+
+Use `cronexpr.ParseWithZone(cronLine string, offset int) (*Expression, error)` to parse crontab expression with time zone when the caller and server are not in the same time zone.
+```go
+now := time.Now()
+crontab := "0 0 10 29 2 * *"
+name, offset := now.Zone()
+t.Logf("local time zone name=[%s], offset=[%d]", name, offset) // name=[CST], offset=[28800]
+
+expr, _ := Parse(crontab)
+next := expr.Next(now)
+t.Logf("+8:00 next=[%s]", next.String()) // next=[2020-02-29 10:00:00 +0800 CST]
+expr, _ = ParseWithZone(crontab, 0)      // needs to be executed at the time zone (GMT)
+next = expr.Next(now)                    // Actual execution time in +8:00
+t.Logf("+0:00 next=[%s]", next.String()) // next=[2020-02-29 18:00:00 +0800 CST]
+```
 
 Use `time.IsZero()` to find out whether a valid time was returned. For example,
 
-    cronexpr.MustParse("* * * * * 1980").Next(time.Now()).IsZero()
+```go
+cronexpr.MustParse("* * * * * 1980").Next(time.Now()).IsZero()
+```
 
 will return `true`, whereas
 
-    cronexpr.MustParse("* * * * * 2050").Next(time.Now()).IsZero()
+```go
+cronexpr.MustParse("* * * * * 2050").Next(time.Now()).IsZero()
+```
 
 will return `false` (as of 2013-08-29...)
 
 You may also query for `n` next time stamps:
 
-    cronexpr.MustParse("0 0 29 2 *").NextN(time.Now(), 5)
+```go
+cronexpr.MustParse("0 0 29 2 *").NextN(time.Now(), 5)
+```
 
 which returns a slice of time.Time objects, containing the following time stamps (as of 2013-08-30):
 

@@ -15,6 +15,7 @@ package cronexpr
 /******************************************************************************/
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
@@ -47,7 +48,7 @@ var crontests = []crontest{
 			{"2012-12-31 23:59:59", "2013-01-01 00:00:00"},
 		},
 	},
-
+	
 	// every 5 Second
 	{
 		"*/5 * * * * * *",
@@ -62,7 +63,7 @@ var crontests = []crontest{
 			{"2012-12-31 23:59:59", "2013-01-01 00:00:00"},
 		},
 	},
-
+	
 	// Minutes
 	{
 		"* * * * *",
@@ -77,7 +78,7 @@ var crontests = []crontest{
 			{"2012-12-31 23:59:00", "2013-01-01 00:00:00"},
 		},
 	},
-
+	
 	// Minutes with interval
 	{
 		"17-43/5 * * * *",
@@ -93,7 +94,7 @@ var crontests = []crontest{
 			{"2012-12-31 23:50:00", "2013-01-01 00:17:00"},
 		},
 	},
-
+	
 	// Minutes interval, list
 	{
 		"15-30/4,55 * * * *",
@@ -110,7 +111,7 @@ var crontests = []crontest{
 			{"2012-12-31 23:55:00", "2013-01-01 00:15:00"},
 		},
 	},
-
+	
 	// Days of week
 	{
 		"0 0 * * MON",
@@ -139,7 +140,7 @@ var crontests = []crontest{
 			{"2013-12-30 00:30:00", "Sat 2014-01-04 00:00"},
 		},
 	},
-
+	
 	// Specific days of week
 	{
 		"0 0 * * 6#5",
@@ -148,7 +149,7 @@ var crontests = []crontest{
 			{"2013-09-02 00:00:00", "Sat 2013-11-30 00:00"},
 		},
 	},
-
+	
 	// Work day of month
 	{
 		"0 0 14W * *",
@@ -158,7 +159,7 @@ var crontests = []crontest{
 			{"2013-08-31 00:00:00", "Fri 2013-09-13 00:00"},
 		},
 	},
-
+	
 	// Work day of month -- end of month
 	{
 		"0 0 30W * *",
@@ -170,7 +171,7 @@ var crontests = []crontest{
 			{"2013-11-02 00:00:00", "Fri 2013-11-29 00:00"},
 		},
 	},
-
+	
 	// Last day of month
 	{
 		"0 0 L * *",
@@ -182,7 +183,7 @@ var crontests = []crontest{
 			{"2016-02-15 00:00:00", "Mon 2016-02-29 00:00"},
 		},
 	},
-
+	
 	// Last work day of month
 	{
 		"0 0 LW * *",
@@ -193,7 +194,7 @@ var crontests = []crontest{
 			{"2014-08-15 00:00:00", "Fri 2014-08-29 00:00"},
 		},
 	},
-
+	
 	// TODO: more tests
 }
 
@@ -222,12 +223,12 @@ func TestZero(t *testing.T) {
 	if next.IsZero() == false {
 		t.Error(`("* * * * * 1980").Next("2013-08-31").IsZero() returned 'false', expected 'true'`)
 	}
-
+	
 	next = MustParse("* * * * * 2050").Next(from)
 	if next.IsZero() == true {
 		t.Error(`("* * * * * 2050").Next("2013-08-31").IsZero() returned 'true', expected 'false'`)
 	}
-
+	
 	next = MustParse("* * * * * 2099").Next(time.Time{})
 	if next.IsZero() == false {
 		t.Error(`("* * * * * 2014").Next(time.Time{}).IsZero() returned 'true', expected 'false'`)
@@ -288,17 +289,17 @@ func TestInterval_Interval60Issue(t *testing.T) {
 	if err == nil {
 		t.Errorf("parsing with interval 60 should return err")
 	}
-
+	
 	_, err = Parse("*/61 * * * * *")
 	if err == nil {
 		t.Errorf("parsing with interval 61 should return err")
 	}
-
+	
 	_, err = Parse("2/60 * * * * *")
 	if err == nil {
 		t.Errorf("parsing with interval 60 should return err")
 	}
-
+	
 	_, err = Parse("2-20/61 * * * * *")
 	if err == nil {
 		t.Errorf("parsing with interval 60 should return err")
@@ -339,4 +340,30 @@ func BenchmarkNext(b *testing.B) {
 		next = expr.Next(next)
 		next = expr.Next(next)
 	}
+}
+
+func TestParse(t *testing.T) {
+	now := time.Now()
+	expr, err := Parse("0 5/7 10 20-25 2-10/2 5#2 2050-2055")
+	assert.Nil(t, err)
+	t.Logf("expr=[%+v]", expr)
+	next := expr.NextN(now, 4)
+	assert.True(t, len(next) > 0)
+	for _, nextTime := range next {
+		t.Logf("next=[%s]", nextTime.String())
+	}
+}
+
+func TestParseWithZone(t *testing.T) {
+	now := time.Now()
+	crontab := "0 0 10 29 2 * *"
+	name, offset := now.Zone()
+	t.Logf("local time zone name=[%s], offset=[%d]", name, offset) // name=[CST], offset=[28800]
+	
+	expr, _ := Parse(crontab)
+	next := expr.Next(now)
+	t.Logf("+8:00 next=[%s]", next.String()) // next=[2020-02-29 10:00:00 +0800 CST]
+	expr, _ = ParseWithZone(crontab, 0)      // needs to be executed at the time zone (GMT)
+	next = expr.Next(now)                    // Actual execution time in +8:00
+	t.Logf("+0:00 next=[%s]", next.String()) // next=[2020-02-29 18:00:00 +0800 CST]
 }
