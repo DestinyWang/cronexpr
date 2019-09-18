@@ -367,3 +367,17 @@ func TestParseWithZone(t *testing.T) {
 	next = expr.Next(now)                    // Actual execution time in +8:00
 	t.Logf("+0:00 next=[%s]", next.String()) // next=[2020-02-29 18:00:00 +0800 CST]
 }
+
+func TestZone(t *testing.T) {
+	cron := "0 6 * * *"
+	expression, e := ParseWithZone(cron, 0)
+	t.Logf("expression hourList=[%v]", expression.hourList)
+	assert.Nil(t, e)
+	from := time.Unix(1568808000, 0)
+	zone := expression.NextWithZone(from)
+	t.Logf("time in CST: %s", zone.String())
+	zone1 := expression.NextWithZone(zone)
+	t.Logf("time in CST: %s", zone1.String())
+	zone2 := expression.NextWithZone(zone1)
+	t.Logf("time in CST: %s", zone2.String())
+}

@@ -17,6 +17,7 @@ package cronexpr
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"sort"
 	"time"
 )
@@ -42,6 +43,7 @@ type Expression struct {
 	lastWeekDaysOfWeek     map[int]bool
 	daysOfWeekRestricted   bool
 	yearList               []int
+	srcOffset              int
 }
 
 /******************************************************************************/
@@ -67,10 +69,10 @@ func MustParse(cronLine string) *Expression {
 // about what is a well-formed cron expression from this library's point of
 // view.
 func Parse(cronLine string) (*Expression, error) {
-	
+
 	// Maybe one of the built-in aliases is being used
 	cron := cronNormalizer.Replace(cronLine)
-	
+
 	indices := fieldFinder.FindAllStringIndex(cron, -1)
 	fieldCount := len(indices)
 	if fieldCount < 5 {
@@ -80,13 +82,13 @@ func Parse(cronLine string) (*Expression, error) {
 	if fieldCount > 7 {
 		fieldCount = 7
 	}
-	
+
 	var expr = Expression{
 		expression: cronLine,
 	}
 	var field = 0
 	var err error
-	
+
 	// second field (optional)
 	if fieldCount == 7 {
 		err = expr.secondFieldHandler(cron[indices[field][0]:indices[field][1]])
@@ -97,42 +99,42 @@ func Parse(cronLine string) (*Expression, error) {
 	} else {
 		expr.secondList = []int{0}
 	}
-	
+
 	// minute field
 	err = expr.minuteFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-	
+
 	// hour field
 	err = expr.hourFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-	
+
 	// day of month field
 	err = expr.domFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-	
+
 	// month field
 	err = expr.monthFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-	
+
 	// day of week field
 	err = expr.dowFieldHandler(cron[indices[field][0]:indices[field][1]])
 	if err != nil {
 		return nil, err
 	}
 	field += 1
-	
+
 	// year field
 	if field < fieldCount {
 		err = expr.yearFieldHandler(cron[indices[field][0]:indices[field][1]])
@@ -142,7 +144,7 @@ func Parse(cronLine string) (*Expression, error) {
 	} else {
 		expr.yearList = yearDescriptor.defaultList
 	}
-	
+
 	return &expr, nil
 }
 
@@ -186,7 +188,7 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	if fromTime.IsZero() {
 		return fromTime
 	}
-	
+
 	// Since expr.nextSecond()-expr.nextMonth() expects that the
 	// supplied time stamp is a perfect match to the underlying cron
 	// expression, and since this function is an entry point where `fromTime`
@@ -196,7 +198,7 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	// stamp falls in between matching time stamps, thus we move
 	// to closest future matching immediately upon encountering a mismatching
 	// time stamp.
-	
+
 	// year
 	v := fromTime.Year()
 	i := sort.SearchInts(expr.yearList, v)
@@ -215,12 +217,12 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	if v != expr.monthList[i] {
 		return expr.nextMonth(fromTime)
 	}
-	
+
 	expr.actualDaysOfMonthList = expr.calculateActualDaysOfMonth(fromTime.Year(), int(fromTime.Month()))
 	if len(expr.actualDaysOfMonthList) == 0 {
 		return expr.nextMonth(fromTime)
 	}
-	
+
 	// day of month
 	v = fromTime.Day()
 	i = sort.SearchInts(expr.actualDaysOfMonthList, v)
@@ -254,11 +256,24 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 	if i == len(expr.secondList) {
 		return expr.nextMinute(fromTime)
 	}
-	
+
 	// If we reach this point, there is nothing better to do
 	// than to move to the next second
-	
+
 	return expr.nextSecond(fromTime)
+}
+
+/******************************************************************************/
+func (expr *Expression) NextWithZone(from time.Time) time.Time {
+	// 回退一天
+	originFrom := time.Unix(from.Unix()-24*3600, 0)
+	logrus.Infof("from=[%s]", from.String())
+	logrus.Infof("originFrom=[%s]", originFrom.String())
+	for originFrom.Unix() <= from.Unix() {
+		originFrom = expr.Next(originFrom)
+	}
+	logrus.Infof("new originFrom=[%s]", originFrom)
+	return originFrom
 }
 
 /******************************************************************************/
