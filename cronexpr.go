@@ -17,7 +17,6 @@ package cronexpr
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"sort"
 	"time"
 )
@@ -149,31 +148,6 @@ func Parse(cronLine string) (*Expression, error) {
 }
 
 /******************************************************************************/
-// In contrast to Parse(), ParseWithZone() has an parameter of `offset`,
-// representing the user's time zone.
-// This parameter comes from the second return value of the `time.Zone()`
-// function, which the user can pass directly.
-// Most time zones differ from GMT by whole hours
-// Special time zone: IRT,IT(+3:30) AFT(+4:30) MMT(+6:30) NST,NFT(-3:30)
-func ParseWithZone(cronLine string, offset int) (*Expression, error) {
-	if offset < -12*3600 || offset > 12*3600 || offset%(3600/2) != 0 {
-		return nil, fmt.Errorf("illegal time zone offset: [%d]", offset)
-	}
-	expression, err := Parse(cronLine)
-	if err != nil {
-		return nil, fmt.Errorf("%s", err.Error())
-	}
-	_, localOffset := time.Now().Zone()
-	replacedHourList := make([]int, 0, len(expression.hourList))
-	for _, h := range expression.hourList {
-		replacedHourList = append(replacedHourList, (h+24-offset/3600+localOffset/3600)%24)
-	}
-	expression.hourList = replacedHourList
-	sort.Ints(expression.hourList)
-	return expression, nil
-}
-
-/******************************************************************************/
 
 // Next returns the closest time instant immediately following `fromTime` which
 // matches the cron expression `expr`.
@@ -265,15 +239,13 @@ func (expr *Expression) Next(fromTime time.Time) time.Time {
 
 /******************************************************************************/
 func (expr *Expression) NextWithZone(from time.Time) time.Time {
-	// 回退一天
-	originFrom := time.Unix(from.Unix()-24*3600, 0)
-	logrus.Infof("from=[%s]", from.String())
-	logrus.Infof("originFrom=[%s]", originFrom.String())
-	for originFrom.Unix() <= from.Unix() {
-		originFrom = expr.Next(originFrom)
-	}
-	logrus.Infof("new originFrom=[%s]", originFrom)
-	return originFrom
+	// 通过 local 相对时间模拟 src 相对时间
+	_, localOffset := time.Now().Zone()
+	localTime := time.Unix(from.Unix() - int64(localOffset) + int64(expr.srcOffset), 0)
+	next := expr.Next(localTime)
+	// 相对时差
+	mistiming := next.Unix() - localTime.Unix()
+	return time.Unix(from.Unix() + mistiming, 0)
 }
 
 /******************************************************************************/

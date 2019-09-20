@@ -33,6 +33,14 @@ var dowNormalizedOffsets = [][]int{
 
 /******************************************************************************/
 
+func (expr *Expression) TimeZone(offset int) *Expression {
+
+	expr.srcOffset = offset
+	return expr
+}
+
+/******************************************************************************/
+
 func (expr *Expression) nextYear(t time.Time) time.Time {
 	// Find index at which item in list is greater or equal to
 	// candidate year
