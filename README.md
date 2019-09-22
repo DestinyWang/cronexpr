@@ -1,3 +1,5 @@
+> forked from `github/gorhill/cronexpr`, Since the original author has archived the project and no longer accepts the Pull Request, I continue development here
+
 Golang Cron expression parser
 =============================
 Given a cron expression and a time stamp, you can get the next time stamp which satisfies the cron expression.
@@ -72,14 +74,14 @@ Other details
 
 Install
 -------
-    go get github.com/gorhill/cronexpr
+    go get github.com/DestinyWang/cronexpr
 
 Usage
 -----
 Import the library:
 
 ```go
-import "github.com/gorhill/cronexpr"
+import "github.com/DestinyWang/cronexpr"
 import "time"
 ```
 
@@ -99,18 +101,13 @@ nextTime = expr.Next(nextTime)
 ```
 
 Use `cronexpr.ParseWithZone(cronLine string, offset int) (*Expression, error)` to parse crontab expression with time zone when the caller and server are not in the same time zone.
+
 ```go
+srcOffset := 28800 // the user's relative jet lag
 now := time.Now()
 crontab := "0 0 10 29 2 * *"
-name, offset := now.Zone()
-t.Logf("local time zone name=[%s], offset=[%d]", name, offset) // name=[CST], offset=[28800]
-
 expr, _ := Parse(crontab)
-next := expr.Next(now)
-t.Logf("+8:00 next=[%s]", next.String()) // next=[2020-02-29 10:00:00 +0800 CST]
-expr, _ = ParseWithZone(crontab, 0)      // needs to be executed at the time zone (GMT)
-next = expr.Next(now)                    // Actual execution time in +8:00
-t.Logf("+0:00 next=[%s]", next.String()) // next=[2020-02-29 18:00:00 +0800 CST]
+next := expr.TimeZone(srcOffset).NextWithZone(now)
 ```
 
 Use `time.IsZero()` to find out whether a valid time was returned. For example,
